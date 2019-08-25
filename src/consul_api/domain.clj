@@ -35,8 +35,8 @@
   {:Enabled (field s/Bool {:description "Reports whether ACL replication is enabled for the datacenter"})
    :Running (field s/Bool {:description "Reports whether the ACL replication process is running. The process may take approximately 60 seconds to begin running after a leader election occurs."})
    :SourceDatacenter (field s/Str {:description "The authoritative ACL datacenter that ACLs are being replicated from and will match the primary_datacenter configuration"})
-   :ReplicationType (field (s/enum :legacy :policies :tokens
-                               {:description "The type of replication that is currently in use."}))
+   :ReplicationType (field (s/enum :legacy :policies :tokens)
+                           {:description "The type of replication that is currently in use."})
    :ReplicatedIndex (field s/Int {:description "The last index that was successfully replicated. Which data the replicated index refers to depends on the replication type. For legacy replication this can be compared with the value of the X-Consul-Index header returned by the /v1/acl/list endpoint to determine if the replication process has gotten all available ACLs. When in either tokens or policies mode, this index can be compared with the value of the X-Consul-Index header returned by the /v1/acl/polcies endpoint to determine if the policy replication process has gotten all available ACL policies. Note that ACL replication is rate limited so the indexes may lag behind the primary datacenter."})
    :ReplicatedTokenIndex (field s/Int {:description "The last token index that was successfully replicated. This index can be compared with the value of the X-Consul-Index header returned by the /v1/acl/tokens endpoint to determine if the replication process has gotten all available ACL tokens. Note that ACL replication is rate limited so the indexes may lag behind the primary datacenter."})
    :LastSuccess (field s/Inst {:description "The UTC time of the last successful sync operation. Since ACL replication is done with a blocking query, this may not update for up to 5 minutes if there have been no ACL changes to replicate. A zero value of \"0001-01-01T00:00:00Z\" will be present if no sync has been successful."})
@@ -105,10 +105,10 @@
   {:Timestamp (field s/Inst {:description "The timestamp of the interval for the displayed metrics. Metrics are aggregated on a ten second interval, so this value (along with the displayed metrics) will change every ten seconds."})
    :Gauges (field [{:Name s/Str
                         :Value s/Int
-                        :Labels {s/Str s/Str}
-                      {:description "A list of gauges which store one value that is updated as time goes on, such as the amount of memory allocated"}}])
-   :Points (field [s/Any
-                      {:description "A list of point metrics, which each store a series of points under a given name"}])
+                        :Labels {s/Str s/Str}}]
+                  {:description "A list of gauges which store one value that is updated as time goes on, such as the amount of memory allocated"})
+   :Points (field [s/Any]
+                  {:description "A list of point metrics, which each store a series of points under a given name"})
    :Counters (field [{:Name s/Str
                           :Count s/Int
                           :Sum s/Int
@@ -116,16 +116,16 @@
                           :Max s/Int
                           :Mean s/Int
                           :Stddev s/Int
-                          :Labels {s/Str s/Str}
-                        {:description "A list of counters, which store info about a metric that is incremented over time such as the number of requests to an HTTP endpoint."}}])
+                          :Labels {s/Str s/Str}}]
+                    {:description "A list of counters, which store info about a metric that is incremented over time such as the number of requests to an HTTP endpoint."})
    :Samples (field [{:Name s/Str
                          :Count s/Int
                          :Sum Double
                          :Min Double
                          :Max Double
                          :Stddev Double
-                         :Labels {s/Str s/Str}
-                       {:description "A list of samples, which store info about the amount of time spent on an operation, such as the time taken to serve a request to a specific http endpoint."}}])})
+                         :Labels {s/Str s/Str}}]
+                   {:description "A list of samples, which store info about the amount of time spent on an operation, such as the time taken to serve a request to a specific http endpoint."})})
 
 (s/defschema AgentCheck
   {:Node s/Str
@@ -163,3 +163,124 @@
    (s/optional-key :TTL) (field s/Str {:description "Specifies this is a TTL check, and the TTL endpoint must be used periodically to update the state of the check."})
    (s/optional-key :ServiceID) (field s/Str {:description "Specifies the ID of a service to associate the registered check with an existing service provided by the agent."})
    (s/optional-key :Status) (field s/Str {:description "Specifies the initial status of the health check."})})
+
+(s/defschema TaggedAddresses
+  {:lan {:address s/Str
+         :port s/Int}
+   :wan {:address s/Str
+         :port s/Int}})
+
+(s/defschema AgentService
+  {:ID s/Str
+   :Service s/Str
+   :Tags [s/Str]
+   :TaggedAddresses TaggedAddresses
+   :Meta {s/Str s/Str}
+   :Port s/Int
+   :Address s/Str
+   :EnableTagOverride s/Bool
+   :Weights {s/Str s/Int}})
+
+(s/defschema AgentServices
+  {s/Str AgentService})
+
+(s/defschema Proxy
+  {:DestinationServiceName s/Str
+   :DestinationServiceID s/Str
+   :LocalServiceAddress s/Str
+   :LocalServicePort s/Int
+   :Config {s/Str s/Str}
+   :Upstreams [{:DestinationType s/Str
+                :DestinationName s/Str
+                :LocalBindPort s/Int}]})
+
+(s/defschema AgentServiceConfiguration
+  {:Kind s/Str
+   :ID s/Str
+   :Service s/Str
+   :Tags (s/maybe [s/Str]) ; todo just a guess
+   :Meta (s/maybe {s/Str s/Str})
+   :Port s/Int
+   :TaggedAddresses TaggedAddresses
+   :Weights {s/Str s/Int}
+   :EnableTagOverride s/Bool
+   :ContentHash s/Str
+   (s/optional-key :Proxy) (s/maybe Proxy)})
+
+(s/defschema AgentServicesHealth
+  {s/Str [AgentService]})
+
+(s/defschema Connect
+  {(s/optional-key :Native) (field s/Bool {:description "Specifies whether this service supports the Connect protocol natively. If this is true, then Connect proxies, DNS queries, etc. will be able to service discover this service."})
+   (s/optional-key :Proxy) (field Proxy {:description "Deprecated Specifies that a managed Connect proxy should be started for this service instance, and optionally provides configuration for the proxy. The format is as documented in Managed Proxy Deprecation."})
+   (s/optional-key :SidecarService) (field {s/Str s/Any} {:description "Specifies an optional nested service definition to register. For more information see Sidecar Service Registration."})})
+
+(s/defschema AgentRegisterRequest
+  {:Name (field s/Str {:description "Specifies the logical name of the service. Many service instances may share the same logical service name."})
+   (s/optional-key :ID) (field s/Str {:description "Specifies a unique ID for this service. This must be unique per agent. This defaults to the Name parameter if not provided."})
+   (s/optional-key :Tags) (field [s/Str] {:description "Specifies a list of tags to assign to the service. These tags can be used for later filtering and are exposed via the APIs."})
+   (s/optional-key :Address) (field s/Str {:description "Specifies the address of the service. If not provided, the agent's address is used as the address for the service during DNS queries."})
+   (s/optional-key :TaggedAddresses) (field TaggedAddresses {:description "Specifies a map of explicit LAN and WAN addresses for the service instance. Both the address and port can be specified within the map values."})
+   (s/optional-key :Meta) (field {s/Str s/Str} {:description "Specifies arbitrary KV metadata linked to the service instance."})
+   (s/optional-key :Port) (field s/Int {:description "Specifies the port of the service."})
+   (s/optional-key :Kind) (field s/Str {:description "The kind of service. Defaults to \"\" which is a typical Consul service. This value may also be \"connect-proxy\" for services that are Connect-capable proxies representing another service or \"mesh-gateway\" for instances of a mesh gateway"})
+   (s/optional-key :Proxy) (field Proxy {:description "From 1.2.3 on, specifies the configuration for a Connect proxy instance. This is only valid if Kind == \"connect-proxy\" or Kind == \"mesh-gateway\". See the Proxy documentation for full details."})
+   (s/optional-key :Connect) (field Connect {:description "Specifies the configuration for Connect. See the Connect Structure section below for supported fields."})
+   (s/optional-key :Check) (field AgentCheck {:description "Specifies a check. Please see the check documentation for more information about the accepted fields. If you don't provide a name or id for the check then they will be generated. To provide a custom id and/or name set the CheckID and/or Name field."})
+   (s/optional-key :Checks) (field [AgentCheck] {:description "Specifies a list of checks. Please see the check documentation for more information about the accepted fields. If you don't provide a name or id for the check then they will be generated. To provide a custom id and/or name set the CheckID and/or Name field. The automatically generated Name and CheckID depend on the position of the check within the array, so even though the behavior is deterministic, it is recommended for all checks to either let consul set the CheckID by leaving the field empty/omitting it or to provide a unique value."})
+   (s/optional-key :EnableTagOverride) (field s/Bool {:description "Specifies to disable the anti-entropy feature for this service's tags. If EnableTagOverride is set to true then external agents can update this service in the catalog and modify the tags. Subsequent local sync operations by this agent will ignore the updated tags. For instance, if an external agent modified both the tags and the port for this service and EnableTagOverride was set to true then after the next sync cycle the service's port would revert to the original value but the tags would maintain the updated value. As a counter example, if an external agent modified both the tags and port for this service and EnableTagOverride was set to false then after the next sync cycle the service's port and the tags would revert to the original value and all modifications would be lost."})
+   (s/optional-key :Weights) (field {s/Str s/Int} {:description " Specifies weights for the service. Please see the service documentation for more information about weights. If this field is not provided weights will default to {\"Passing\": 1, \"Warning\": 1}.\n\nIt is important to note that this applies only to the locally registered service. If you have multiple nodes all registering the same service their EnableTagOverride configuration and all other service configuration items are independent of one another. Updating the tags for the service registered on one node is independent of the same service (by name) registered on another node. If EnableTagOverride is not specified the default value is false. See anti-entropy syncs for more info."})})
+
+(s/defschema ConnectAuthorizeRequest
+  {:Target (field s/Str {:description "The name of the service that is being requested."})
+   :ClientCertURI (field s/Str {:description "The unique identifier for the requesting client. This is currently the URI SAN from the TLS client certificate."})
+   :ClientCertSerial (field s/Str {:description "The colon-hex-encoded serial number for the requesting client cert. This is used to check against revocation lists."})})
+
+(s/defschema ConnectAuthorizeResponse
+  {:Authorized s/Bool
+   :Reason s/Str})
+
+(s/defschema CertificateAuthorityRoot
+  {:ID s/Str
+   :Name s/Str
+   :SerialNumber s/Int
+   :SigningKeyID s/Str
+   :NotBefore s/Inst
+   :NotAfter s/Inst
+   :RootCerts s/Str
+   :IntermediateCerts (s/maybe [s/Str]) ; FIXME what is this field really?
+   :Active s/Bool
+   :CreateIndex s/Int
+   :ModifyIndex s/Int})
+
+(s/defschema CertificateAuthorityRoots
+  {:ActiveRootID s/Str
+   :Roots [CertificateAuthorityRoot]})
+
+(s/defschema ServiceLeafCertificate
+  {:SerialNumber (field s/Str {:description "Monotonically increasing 64-bit serial number representing all certificates issued by this Consul cluster."})
+   :CertPEM (field s/Str {:description "The PEM-encoded certificate."})
+   :PrivateKeyPEM (field s/Str {:description "The PEM-encoded private key for this certificate."})
+   :Service (field s/Str {:description "The name of the service that this certificate identifies."})})
+
+; catalog API
+
+(s/defschema CatalogRegisterRequest
+  {(s/optional-key :ID) (field s/Uuid {:description "An optional UUID to assign to the node."})
+   :Node (field s/Str {:description "Specifies the node ID to register."})
+   :Address (field s/Str {:description "Specifies the address to register."})
+   (s/optional-key :Datacenter) (field s/Str {:description "Specifies the datacenter, which defaults to the agent's datacenter if not provided."})
+   (s/optional-key :TaggedAddresses) (field TaggedAddresses {:description "Specifies the tagged addresses."})
+   (s/optional-key :NodeMeta) (field {s/Str s/Str} {:description "Specifies arbitrary KV metadata pairs for filtering purposes."})
+   (s/optional-key :Service) (field AgentService {:description "Specifies to register a service. If ID is not provided, it will be defaulted to the value of the Service.Service property. Only one service with a given ID may be present per node. The service Tags, Address, Meta, and Port fields are all optional. For more information about these fields and the implications of setting them, see the Service - Agent API page as registering services differs between using this or the Services Agent endpoint."})
+   (s/optional-key :Check) (field AgentCheck {:description "Specifies to register a check. The register API manipulates the health check entry in the Catalog, but it does not setup the script, TTL, or HTTP check to monitor the node's health. To truly enable a new health check, the check must either be provided in agent configuration or set via the agent endpoint.
+
+   The CheckID can be omitted and will default to the value of Name. As with Service.ID, the CheckID must be unique on this node. Notes is an opaque field that is meant to hold human-readable text. If a ServiceID is provided that matches the ID of a service on that node, the check is treated as a service level health check, instead of a node level health check. The Status must be one of passing, warning, or critical.
+
+   The Definition field can be provided with details for a TCP or HTTP health check. For more information, see the Health Checks page."})
+   (s/optional-key :Checks) (field [AgentCheck] {:description "Specifies to register a check. The register API manipulates the health check entry in the Catalog, but it does not setup the script, TTL, or HTTP check to monitor the node's health. To truly enable a new health check, the check must either be provided in agent configuration or set via the agent endpoint.
+
+   The CheckID can be omitted and will default to the value of Name. As with Service.ID, the CheckID must be unique on this node. Notes is an opaque field that is meant to hold human-readable text. If a ServiceID is provided that matches the ID of a service on that node, the check is treated as a service level health check, instead of a node level health check. The Status must be one of passing, warning, or critical.
+
+   The Definition field can be provided with details for a TCP or HTTP health check. For more information, see the Health Checks page."})
+   (s/optional-key :SkipNodeUpdate) (field s/Bool {:description "Specifies whether to skip updating the node's information in the registration. This is useful in the case where only a health check or service entry on a node needs to be updated or when a register request is intended to update a service entry or health check. In both use cases, node information will not be overwritten, if the node is already registered. Note, if the paramater is enabled for a node that doesn't exist, it will still be created."})})
