@@ -165,10 +165,10 @@
    (s/optional-key :Status) (field s/Str {:description "Specifies the initial status of the health check."})})
 
 (s/defschema TaggedAddresses
-  {:lan {:address s/Str
-         :port s/Int}
-   :wan {:address s/Str
-         :port s/Int}})
+  {(s/optional-key :lan) {:address s/Str
+                          (s/optional-key :port) s/Int}
+   (s/optional-key :wan) {:address s/Str
+                          (s/optional-key :port) s/Int}})
 
 (s/defschema AgentService
   {:ID s/Str
@@ -283,4 +283,46 @@
    The CheckID can be omitted and will default to the value of Name. As with Service.ID, the CheckID must be unique on this node. Notes is an opaque field that is meant to hold human-readable text. If a ServiceID is provided that matches the ID of a service on that node, the check is treated as a service level health check, instead of a node level health check. The Status must be one of passing, warning, or critical.
 
    The Definition field can be provided with details for a TCP or HTTP health check. For more information, see the Health Checks page."})
-   (s/optional-key :SkipNodeUpdate) (field s/Bool {:description "Specifies whether to skip updating the node's information in the registration. This is useful in the case where only a health check or service entry on a node needs to be updated or when a register request is intended to update a service entry or health check. In both use cases, node information will not be overwritten, if the node is already registered. Note, if the paramater is enabled for a node that doesn't exist, it will still be created."})})
+   (s/optional-key :SkipNodeUpdate) (field s/Bool {:description "Specifies whether to skip updating the node's information in the registration. This is useful in the case where only a health check or service entry on a node needs to be updated or when a register request is intended to update a service entry or health check. In both use cases, node information will not be overwritten, if the node is already registered. Note, if the parameter is enabled for a node that doesn't exist, it will still be created."})})
+
+(s/defschema CatalogDeregisterRequest
+  {:Node (field s/Str {:description "Specifies the ID of the node. If no other values are provided, this node, all its services, and all its checks are removed."})
+   (s/optional-key :Datacenter) (field s/Str {:description "Specifies the datacenter, which defaults to the agent's datacenter if not provided."})
+   (s/optional-key :CheckID) (field s/Str {:description "Specifies the ID of the check to remove."})
+   (s/optional-key :ServiceID) (field s/Str {:description "Specifies the ID of the service to remove. The service and all associated checks will be removed."})})
+
+(s/defschema CatalogNode
+  {:ID s/Uuid
+   :Node s/Str
+   :Address s/Str
+   :Datacenter s/Str
+   (s/optional-key :TaggedAddresses) TaggedAddresses
+   (s/optional-key :Meta) {s/Str s/Str}})
+
+(s/defschema CatalogServiceNode
+  {:Address (field s/Str {:description "is the IP address of the Consul node on which the service is registered."})
+   :Datacenter (field s/Str {:description "is the data center of the Consul node on which the service is registered."})
+   (s/optional-key :TaggedAddresses) (field TaggedAddresses {:description "is the list of explicit LAN and WAN IP addresses for the agent"})
+   (s/optional-key :NodeMeta) (field {s/Str s/Str} {:description "is a list of user-defined metadata key/value pairs for the node"})
+   :CreateIndex (field s/Int {:description "is an internal index value representing when the service was created"})
+   :ModifyIndex (field s/Int {:description "is the last index that modified the service"})
+   :Node (field s/Str {:description "is the name of the Consul node on which the service is registered"})
+   (s/optional-key :ServiceAddress) (field s/Str {:description "is the IP address of the service host — if empty, node address should be used"})
+   :ServiceEnableTagOverride (field s/Bool {:description "indicates whether service tags can be overridden on this service"})
+   :ServiceID (field s/Str {:description "is a unique service instance identifier"})
+   :ServiceName (field s/Str {:description "is the name of the service"})
+   (s/optional-key :ServiceMeta) (field {s/Str s/Str} {:description "is a list of user-defined metadata key/value pairs for the service"})
+   :ServicePort (field s/Int {:description "is the port number of the service"})
+   (s/optional-key :ServiceTags) (field [s/Str] {:description "is a list of tags for the service"})
+   (s/optional-key :ServiceTaggedAddresses) (field TaggedAddresses {:description "is the map of explicit LAN and WAN addresses for the service instance. This includes both the address as well as the port."})
+   :ServiceKind (field s/Str {:description "is the kind of service, usually \"\". See the Agent registration API for more information."})
+   (s/optional-key :ServiceProxy) (field Proxy {:description "is the proxy config as specified in Connect Proxies."})
+   (s/optional-key :ServiceConnect) (field Connect {:description "are the Connect settings. The value of this struct is equivalent to the Connect field for service registration."})})
+
+(s/defschema CatalogService
+  {:ID s/Str
+   :Service s/Str
+   (s/optional-key :Tags) (s/maybe [s/Str])
+   (s/optional-key :TaggedAddresses) TaggedAddresses
+   (s/optional-key :Meta) {s/Str s/Str}
+   :Port s/Int})
