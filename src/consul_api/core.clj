@@ -12,6 +12,10 @@
                :ui "/"
                :data {:info {:version "1"
                              :title "Consul API"}}
+               :basePath "/v1"
+               :host "localhost"
+               :port 8500
+               :scheme "http"
                :tags [{:name "ACL"
                        :description "The /acl endpoints are used to manage ACL tokens and policies in Consul, bootstrap the ACL system, check ACL replication status, and translate rules. There are additional pages for managing tokens and policies with the /acl endpoints.\n\nFor more information on how to setup ACLs, please see the ACL Guide."}
                       {:name "Agent"
@@ -19,7 +23,13 @@
                       {:name "Catalog"
                        :description "The /catalog endpoints register and deregister nodes, services, and checks in Consul. The catalog should not be confused with the agent, since some of the API methods look similar."}
                       {:name "Config"
-                       :description "The /config endpoints create, update, delete and query central configuration entries registered with Consul. See the agent configuration for more information on how to enable this functionality for centrally configuring services and configuration entries docs for a description of the configuration entries content."}]}
+                       :description "The /config endpoints create, update, delete and query central configuration entries registered with Consul. See the agent configuration for more information on how to enable this functionality for centrally configuring services and configuration entries docs for a description of the configuration entries content."}
+                      {:name "Health"
+                       :description "The /health endpoints query health-related information. They are provided separately from the /catalog endpoints since users may prefer not to use the optional health checking mechanisms. Additionally, some of the query results from the health endpoints are filtered while the catalog endpoints provide the raw entries."}
+                      {:name "KV Store"
+                       :description "The /kv endpoints access Consul's simple key/value store, useful for storing service configuration or other metadata.\n\nIt is important to note that each datacenter has its own KV store, and there is no built-in replication between datacenters. If you are interested in replication between datacenters, please view the Consul Replicate project.\n\nValues in the KV store cannot be larger than 512kb.\nFor multi-key updates, please consider using transaction.\n\n"}
+                      {:name "Session"
+                       :description "The /session endpoints create, destroy, and query sessions in Consul."}]}
 
      (context "/v1" []
        (context "/acl" []
@@ -487,6 +497,7 @@
        ; TODO Discovery Chain
 
        (context "/health" []
+         :tags ["Health"]
          (GET "/node/:node" request
            :operationId "listNodeHealthChecks"
            :summary "List Checks for Node"
@@ -566,4 +577,141 @@
                           {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
                           {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
                           {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
-           :return [NodeHealthCheck]))))))
+           :return [NodeHealthCheck]))
+
+       (context "/kv" []
+         :tags ["KV Store"]
+         (GET "/:key" request
+           :operationId "readKey"
+           :summary "Read Key"
+           :description "This endpoint returns the specified key. If no key exists at the given path, a 404 is returned instead of a 200 response.\n\nFor multi-key reads, please consider using transaction."
+           :path-params [key :- (field s/Str {:description "Specifies the path of the key to read."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {recurse :- (field s/Bool {:description "Specifies if the lookup should be recursive and key treated as a prefix instead of a literal match."}) false}
+                          {raw :- (field s/Bool {:description "Specifies the response is just the raw value of the key, without any encoding or metadata."}) false}
+                          {keys :- (field s/Bool {:description "Specifies to return only keys (no values or metadata). Specifying this implies recurse."}) false}
+                          {separator :- (field s/Str {:description "Specifies the string to use as a separator for recursive key lookups. This option is only used when paired with the keys parameter to limit the prefix of keys returned, only up to the given separator. "}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return ReadKeyResponse
+           (handler request))
+
+         (PUT "/:key" request
+           :operationId "writeKey"
+           :summary "Create/Update Key"
+           :description "This endpoint" ; upstream doc error
+           :path-params [key :- (field s/Str {:description "Specifies the path of the key to read."})] ; upstream doc error
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried."}) ""}
+                          {flags :- (field s/Int {:description "Specifies an unsigned value between 0 and (2^64)-1. Clients can choose to use this however makes sense for their application."}) 0}
+                          {cas :- (field s/Int {:description "Specifies to use a Check-And-Set operation. This is very useful as a building block for more complex synchronization primitives. If the index is 0, Consul will only put the key if it does not already exist. If the index is non-zero, the key is only set if the index matches the ModifyIndex of that key."}) 0}
+                          {acquire :- (field s/Str {:description "Supply a session ID to use in a lock acquisition operation. This is useful as it allows leader election to be built on top of Consul. If the lock is not held and the session is valid, this increments the LockIndex and sets the Session value of the key in addition to updating the key contents. A key does not need to exist to be acquired. If the lock is already held by the given session, then the LockIndex is not incremented but the key contents are updated. This lets the current lock holder update the key contents without having to give up the lock and reacquire it. Note that an update that does not include the acquire parameter will proceed normally even if another session has locked the key.\n\nFor an example of how to use the lock feature, see the Leader Election Guide."}) ""}
+                          {release :- (field s/Str {:description "Supply a session ID to use in a release operation. This is useful when paired with ?acquire= as it allows clients to yield a lock. This will leave the LockIndex unmodified but will clear the associated Session of the key. The key must be held by this session to be unlocked."}) ""}]
+           :body [r s/Any]
+           :return s/Bool
+           (handler request))
+
+         (DELETE "/:key" request
+           :operationId "deleteKey"
+           :summary "Delete Key"
+           :description "This endpoint deletes a single key or all keys sharing a prefix."
+           :path-params [keys :- (field s/Str {:description ""})] ; upstream doc missing
+           :query-params [{recurse :- (field s/Str {:description "Specifies to delete all keys which have the specified prefix. Without this, only a key with an exact match will be deleted."}) false}
+                          {cas :- (field s/Int {:description "Specifies to use a Check-And-Set operation. This is very useful as a building block for more complex synchronization primitives. Unlike PUT, the index must be greater than 0 for Consul to take any action: a 0 index will not delete the key. If the index is non-zero, the key is only deleted if the index matches the ModifyIndex of that key."}) 0}]
+           (handler request)))
+
+       ; TODO operator API
+       ; TODO prepared query API
+
+       (context "/session" []
+         :tags ["Session"]
+         (PUT "/create" request
+           :operationId "createSession"
+           :summary "Create Session"
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. Using this across datacenters is not recommended."}) ""}]
+           :body [r Session]
+           :return {:ID (field s/Uuid {:description "the ID of the created session"})}
+           (handler request))
+
+         (DELETE "/destroy/:uuid" request
+           :operationId "deleteSession"
+           :summary "Delete Session"
+           :description "This endpoint destroys the session with the given name. If the session UUID is malformed, an error is returned. If the session UUID does not exist or already expired, a 200 is still returned (the operation is idempotent)."
+           :path-params [uuid :- (field s/Uuid {:description "Specifies the UUID of the session to destroy."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. Using this across datacenters is not recommended."}) ""}]
+           :return s/Bool
+           (handler request))
+
+         (GET "/info/:uuid" request
+           :operationId "readSession"
+           :summary "Read Session"
+           :description "This endpoint returns the requested session information."
+           :path-params [uuid :- (field s/Uuid {:description "Specifies the UUID of the session to read."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. Using this across datacenters is not recommended."}) ""}]
+           :return (s/maybe [Session])
+           (handler request))
+
+         (GET "/node/:node" request
+           :operationId "listSessionsForNode"
+           :summary "List Sessions for Node"
+           :description "This endpoint returns the active sessions for a given node."
+           :path-params [node :- (field s/Str {:description "Specifies the name or ID of the node to query."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. Using this across datacenters is not recommended."}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [Session]
+           (handler request))
+
+         (GET "/list" request
+           :operationId "listSessions"
+           :summary "List Sessions"
+           :description "This endpoint returns the list of active sessions."
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. Using this across datacenters is not recommended."}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [Session]
+           (handler request))
+
+         (PUT "/renew/:uuid" request
+           :operationId "renewSession"
+           :summary "Renew Session"
+           :description "This endpoint renews the given session. This is used with sessions that have a TTL, and it extends the expiration by the TTL."
+           :path-params [uuid :- (field s/Uuid {:description "Specifies the UUID of the session to renew."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. Using this across datacenters is not recommended."}) ""}]
+           :return [Session]
+           (handler request)))
+
+       ; TODO snapshot API
+
+       (context "/status" []
+         :tags ["Status"]
+         (GET "/leader" request
+           :operationId "getRaftLeader"
+           :summary "Get Raft Leader"
+           :description "This endpoint returns the Raft leader for the datacenter in which the agent is running."
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried."}) ""}]
+           :return s/Str
+           (handler request))
+
+         (GET "/peers" request
+           :operationId "listRaftPeers"
+           :summary "List Raft Peers"
+           :description "This endpoint retrieves the Raft peers for the datacenter in which the the agent is running. This list of peers is strongly consistent and can be useful in determining when a given server has successfully joined the cluster."
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried."}) ""}]
+           :return [s/Str]
+           (handler request)))
+
+       (PUT "/txn" request
+         :tags ["Transactions"]
+         :operationId "transact"
+         :summary "Create Transaction"
+         :description "This endpoint permits submitting a list of operations to apply to Consul inside of a transaction. If any operation fails, the transaction is rolled back and none of the changes are applied.\n\nIf the transaction does not contain any write operations then it will be fast-pathed internally to an endpoint that works like other reads, except that blocking queries are not currently supported. In this mode, you may supply the ?stale or ?consistent query parameters with the request to control consistency. To support bounding the acceptable staleness of data, read-only transaction responses provide the X-Consul-LastContact header containing the time in milliseconds that a server was last contacted by the leader node. The X-Consul-KnownLeader header also indicates if there is a known leader. These won't be present if the transaction contains any write operations, and any consistency query parameters will be ignored, since writes are always managed by the leader via the Raft consensus protocol."
+         :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried."}) ""}]
+         :body [r TransactionRequest]
+         :return TransactionResponse
+         (handler request))))))

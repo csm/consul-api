@@ -344,3 +344,71 @@
   {:Node CatalogNode
    :Service AgentService
    :Checks [NodeHealthCheck]})
+
+; KV Store API
+
+(s/defschema ReadKeyItemResponse
+  {:CreateIndex (field s/Int {:description "is the internal index value that represents when the entry was created."})
+   :ModifyIndex (field s/Int {:description "is the last index that modified this key. This index corresponds to the X-Consul-Index header value that is returned in responses, and it can be used to establish blocking queries by setting the ?index query parameter. You can even perform blocking queries against entire subtrees of the KV store: if ?recurse is provided, the returned X-Consul-Index corresponds to the latest ModifyIndex within the prefix, and a blocking query using that ?index will wait until any key within that prefix is updated."})
+   :LockIndex (field s/Int {:description "is the number of times this key has successfully been acquired in a lock. If the lock is held, the Session key provides the session that owns the lock."})
+   :Key (field s/Str {:description "is simply the full path of the entry."})
+   :Flags (field s/Int {:description "is an opaque unsigned integer that can be attached to each entry. Clients can choose to use this however makes sense for their application."})
+   :Value (field s/Str {:description "is a base64-encoded blob of data."})
+   (s/optional-key :Session) s/Str})
+
+(s/defschema ReadKeysResponse [s/Str])
+
+(s/defschema ReadKeyResponse
+  (s/conditional map? ReadKeyItemResponse
+                 sequential? ReadKeysResponse))
+
+; Session API
+
+(s/defschema Session
+  {(s/optional-key :LockDelay) (field s/Str {:description "Specifies the duration for the lock delay. This must be greater than 0."})
+   (s/optional-key :Node)      (field s/Str {:description "Specifies the name of the node. This must refer to a node that is already registered."})
+   (s/optional-key :Name)      (field s/Str {:description "Specifies a human-readable name for the session."})
+   (s/optional-key :Checks)    (field [s/Str] {:description "specifies a list of associated health check IDs (commonly CheckID in API responses). It is highly recommended that, if you override this list, you include the default serfHealth."})
+   (s/optional-key :Behavior)  (field (s/enum "release" "delete") {:description "Controls the behavior to take when a session is invalidated."})
+   (s/optional-key :TTL)       (field s/Str {:description "Specifies the number of seconds (between 10s and 86400s). If provided, the session is invalidated if it is not renewed before the TTL expires. The lowest practical TTL should be used to keep the number of managed sessions low. When locks are forcibly expired, such as when following the leader election pattern in an application, sessions may not be reaped for up to double this TTL, so long TTL values (> 1 hour) should be avoided."})})
+
+; Transaction API
+
+(s/defschema TransactionRequest
+  [(s/cond-pre
+     {:KV {:Verb (field (s/enum "set" "cas" "lock" "unlock" "get" "get-tree" "check-index" "check-session" "check-not-exists" "delete" "delete-tree" "delete-cas")
+                        {:description "Specifies the type of operation to perform."})
+           :Key (field s/Str {:description "Specifies the full path of the entry."})
+           (s/optional-key :Value) (field s/Str {:description "Specifies a base64-encoded blob of data. Values cannot be larger than 512kB."})
+           (s/optional-key :Flags) (field s/Int {:description "Specifies an opaque unsigned integer that can be attached to each entry. Clients can choose to use this however makes sense for their application."})
+           (s/optional-key :Index) (field s/Int {:description "Specifies an index."})
+           (s/optional-key :Session) (field s/Str {:description "Specifies a session."})}}
+     {:Node {:Verb (field (s/enum "set" "cas" "get" "delete" "delete-cas")
+                          {:description "Specifies the type of operation to perform."})
+             :Node (field CatalogNode {:description "Specifies the node information to use for the operation. See the catalog endpoint for the fields in this object. Note the only the node can be specified here, not any services or checks - separate service or check operations must be used for those."})}}
+     {:Service {:Verb (field (s/enum "set" "cas" "get" "delete" "delete-cas")
+                             {:description "Specifies the type of operation to perform."})
+                :Node (field s/Str {:description "Specifies the name of the node to use for this service operation."})
+                :Service (field CatalogService {:description "Specifies the service instance information to use for the operation."})}}
+     {:Check {:Verb (field (s/enum "set" "cas" "get" "delete" "delete-cas")
+                           {:description "Specifies the type of operation to perform."})
+              :Service (field CatalogService {:description "Specifies the check to use for the operation."})}})])
+
+(s/defschema TransactionResponse
+  {(s/optional-key :Results) [(s/cond-pre
+                                {:KV ReadKeyItemResponse}
+                                {:Node CatalogNode}
+                                {:Check {:Node s/Str
+                                         :CheckID s/Str
+                                         :Name s/Str
+                                         :Status s/Str
+                                         :Notes s/Str
+                                         :Output s/Str
+                                         :ServiceID s/Str
+                                         :ServiceName s/Str
+                                         :ServiceTags (s/maybe [s/Str])
+                                         :Definition {s/Any s/Any} ; FIXME
+                                         :CreateIndex s/Int
+                                         :ModifyIndex s/Int}})]
+   (s/optional-key :Errors) [{:OpIndex s/Int
+                              :What s/Str}]})
