@@ -178,7 +178,7 @@
    :Meta {s/Str s/Str}
    :Port s/Int
    :Address s/Str
-   :EnableTagOverride s/Bool
+   (s/optional-key :EnableTagOverride) s/Bool
    :Weights {s/Str s/Int}})
 
 (s/defschema AgentServices
@@ -326,3 +326,21 @@
    (s/optional-key :TaggedAddresses) TaggedAddresses
    (s/optional-key :Meta) {s/Str s/Str}
    :Port s/Int})
+
+; health API
+
+(s/defschema NodeHealthCheck
+  {:ID s/Uuid
+   :Node s/Str
+   :CheckID s/Str
+   :Status s/Str
+   :Notes s/Str
+   :Output s/Str
+   :ServiceID s/Str
+   :ServiceName s/Str
+   :ServiceTags [s/Str]})
+
+(s/defschema HealthService
+  {:Node CatalogNode
+   :Service AgentService
+   :Checks [NodeHealthCheck]})

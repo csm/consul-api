@@ -13,11 +13,13 @@
                :data {:info {:version "1"
                              :title "Consul API"}}
                :tags [{:name "ACL"
-                       :description "Access Control Lists"}
+                       :description "The /acl endpoints are used to manage ACL tokens and policies in Consul, bootstrap the ACL system, check ACL replication status, and translate rules. There are additional pages for managing tokens and policies with the /acl endpoints.\n\nFor more information on how to setup ACLs, please see the ACL Guide."}
                       {:name "Agent"
-                       :description "Agents"}
+                       :description "The /agent endpoints are used to interact with the local Consul agent. Usually, services and checks are registered with an agent which then takes on the burden of keeping that data synchronized with the cluster. For example, the agent registers services and checks with the Catalog and performs anti-entropy to recover from outages.\n\nIn addition to these endpoints, additional endpoints are grouped in the navigation for Checks and Services.\n\n"}
                       {:name "Catalog"
-                       :description "Catalog"}]}
+                       :description "The /catalog endpoints register and deregister nodes, services, and checks in Consul. The catalog should not be confused with the agent, since some of the API methods look similar."}
+                      {:name "Config"
+                       :description "The /config endpoints create, update, delete and query central configuration entries registered with Consul. See the agent configuration for more information on how to enable this functionality for centrally configuring services and configuration entries docs for a description of the configuration entries content."}]}
 
      (context "/v1" []
        (context "/acl" []
@@ -366,7 +368,9 @@
                           {node-meta :- (field s/Str {:description "Specifies a desired node metadata key/value pair of the form key:value. This parameter can be specified multiple times, and will filter the results to nodes with the specified key/value pairs."}) ""}
                           {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
                           {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
-                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}]
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
            :return [CatalogNode]
            (handler request))
 
@@ -377,7 +381,9 @@
            :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
                           {node-meta :- (field s/Str {:description "Specifies a desired node metadata key/value pair of the form key:value. This parameter can be specified multiple times, and will filter the results to nodes with the specified key/value pairs."}) ""}
                           {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
-                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}]
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
            :return {s/Str [s/Str]}
            (handler request))
 
@@ -392,7 +398,9 @@
                           {node-meta :- (field s/Str {:description "Specifies a desired node metadata key/value pair of the form key:value. This parameter can be specified multiple times, and will filter the results to nodes with the specified key/value pairs."}) ""}
                           {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
                           {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
-                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}]
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
            :return [CatalogServiceNode]
            (handler request))
 
@@ -419,7 +427,143 @@
            :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
                           {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
                           {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
-                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}]
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
            :return [{:Node CatalogNode
                      :Services {s/Str CatalogService}}]
-           (handler request)))))))
+           (handler request)))
+
+       (PUT "/config" request
+         :tags ["Config"]
+         :operationId "applyConfiguration"
+         :summary "Apply Configuration"
+         :description "This endpoint creates or updates the given config entry."
+         :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                        {cas :- (field s/Int {:description "Specifies to use a Check-And-Set operation. If the index is 0, Consul will only store the entry if it does not already exist. If the index is non-zero, the entry is only set if the current index matches the ModifyIndex of that entry."}) 0}]
+         :body [r {s/Str s/Str}]
+         (handler request))
+
+       (context "/config" []
+         :tags ["Config"]
+
+         (GET "/config/:kind/:name" request
+           :operationId "getConfiguration"
+           :summary "Get Configuration"
+           :description "This endpoint returns a specific config entry."
+           :path-params [kind :- (field s/Str {:description "Specifies the kind of the entry to read."})
+                         name :- (field s/Str {:description "Specifies the name of the entry to read."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return {s/Str s/Str}
+           (handler request))
+
+         (GET "/:kind" request
+           :operationId "listConfigurations"
+           :summary "List Configurations"
+           :path-params [kind :- (field s/Str {:description "Specifies the kind of the entry to list."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [{s/Str s/Str}]
+           (handler request))
+
+         (DELETE "/:kind/:name" request
+           :operationId "deleteConfiguration"
+           :summary "Delete Configuration"
+           :description "This endpoint creates or updates the given config entry."
+           :path-params [kind :- (field s/Str {:description "Specifies the kind of the entry to delete."})
+                         name :- (field s/Str {:description "Specifies the name of the entry to delete."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}]
+           (handler request)))
+
+       ; TODO Connect
+       ; TODO Coordinates
+       ; TODO Discovery Chain
+
+       (context "/health" []
+         (GET "/node/:node" request
+           :operationId "listNodeHealthChecks"
+           :summary "List Checks for Node"
+           :description "This endpoint returns the checks specific to the node provided on the path."
+           :path-params [node :- (field s/Str {:description "Specifies the name or ID of the node to query"})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [NodeHealthCheck]
+           (handler request))
+
+         (GET "/checks/:service" request
+           :operationId "listServiceHealthChecks"
+           :summary "List Checks for Service"
+           :description "This endpoint returns the checks associated with the service provided on the path."
+           :path-params [service :- (field s/Str {:description "Specifies the service to list checks for."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
+                          {near :- (field s/Str {:description "Specifies a node name to sort the node list in ascending order based on the estimated round trip time from that node. Passing ?near=_agent will use the agent's node for the sort."}) ""}
+                          {node-meta :- (field s/Str {:description "Specifies a desired node metadata key/value pair of the form key:value. This parameter can be specified multiple times, and will filter the results to nodes with the specified key/value pairs."}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [NodeHealthCheck]
+           (handler request))
+
+         (GET "/service/:service" request
+           :operationId "listNodesForService"
+           :summary "List Nodes for Service"
+           :description "This endpoint returns the nodes providing the service indicated on the path. Users can also build in support for dynamic load balancing and other features by incorporating the use of health checks."
+           :path-params [service :- (field s/Str {:description "Specifies the service to list services for."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
+                          {near :- (field s/Str {:description "Specifies a node name to sort the node list in ascending order based on the estimated round trip time from that node. Passing ?near=_agent will use the agent's node for the sort."}) ""}
+                          {node-meta :- (field s/Str {:description "Specifies a desired node metadata key/value pair of the form key:value. This parameter can be specified multiple times, and will filter the results to nodes with the specified key/value pairs."}) ""}
+                          {passing :- (field s/Bool {:description "Specifies that the server should return only nodes with all checks in the passing state. This can be used to avoid additional filtering on the client side."}) false}
+                          {tag :- (field [s/Str] {:description "Specifies the tag to filter the list. Can be used multiple times for additional filtering, returning only the results that include all of the tag values provided."}) []}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [HealthService]
+           (handler request))
+
+         (GET "/connect/:service" request
+           :operationId "listNodesForConnectService"
+           :summary "List Nodes for Connect-capable Service"
+           :description "This endpoint returns the nodes providing a Connect-capable service in a given datacenter. This will include both proxies and native integrations. A service may register both Connect-capable and incapable services at the same time, so this endpoint may be used to filter only the Connect-capable endpoints."
+           :path-params [service :- (field s/Str {:description "Specifies the service to list services for."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
+                          {near :- (field s/Str {:description "Specifies a node name to sort the node list in ascending order based on the estimated round trip time from that node. Passing ?near=_agent will use the agent's node for the sort."}) ""}
+                          {node-meta :- (field s/Str {:description "Specifies a desired node metadata key/value pair of the form key:value. This parameter can be specified multiple times, and will filter the results to nodes with the specified key/value pairs."}) ""}
+                          {passing :- (field s/Bool {:description "Specifies that the server should return only nodes with all checks in the passing state. This can be used to avoid additional filtering on the client side."}) false}
+                          {tag :- (field [s/Str] {:description "Specifies the tag to filter the list. Can be used multiple times for additional filtering, returning only the results that include all of the tag values provided."}) []}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [HealthService]
+           (handler request))
+
+         (GET "/state/:state" request
+           :operationId "listChecksInState"
+           :summary "List Checks in State"
+           :description "This endpoint returns the checks in the state provided on the path."
+           :path-params [state :- (field (s/enum "any" "passing" "warning" "critical") {:description "Specifies the state to query."})]
+           :query-params [{dc :- (field s/Str {:description "Specifies the datacenter to query. This will default to the datacenter of the agent being queried. "}) ""}
+                          {filter :- (field s/Str {:description "Specifies the expression used to filter the queries results prior to returning the data."}) ""}
+                          {near :- (field s/Str {:description "Specifies a node name to sort the node list in ascending order based on the estimated round trip time from that node. Passing ?near=_agent will use the agent's node for the sort."}) ""}
+                          {node-meta :- (field s/Str {:description "Specifies a desired node metadata key/value pair of the form key:value. This parameter can be specified multiple times, and will filter the results to nodes with the specified key/value pairs."}) ""}
+                          {index :- (field (s/maybe s/Int) {:description "Index to use for consul's blocking queries."}) nil}
+                          {wait  :- (field (s/maybe s/Str) {:description "How long to wait for a blocking query"}) nil}
+                          {consistent :- (field s/Int {:description "Set consistent consistency mode."}) 0}
+                          {stale :- (field s/Int {:description "Set stale consistency mode."}) 0}]
+           :return [NodeHealthCheck]))))))
