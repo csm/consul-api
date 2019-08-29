@@ -1,4 +1,4 @@
-(defproject com.github.csm/consul-api "0.1.0-SNAPSHOT"
+(defproject com.github.csm/consul-api "0.1.0"
   :description "Swagger definition of the Consul HTTP API."
   :url "https://github.com/csm/consul-api"
   :license {:name "MPL-2.0"
