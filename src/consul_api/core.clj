@@ -2,7 +2,11 @@
   (:require [compojure.api.sweet :refer :all]
             [consul-api.domain :refer :all]
             [schema.core :as s]
-            [ring.swagger.json-schema :refer [field]]))
+            [ring.swagger.json-schema :refer [field convert-class]]))
+
+(defmethod convert-class (type (byte-array 0))
+  [_ _]
+  {:type "string" :format "binary"})
 
 (defn consul-api
   ([] (consul-api (constantly nil)))
@@ -608,7 +612,8 @@
                           {cas :- (field s/Int {:description "Specifies to use a Check-And-Set operation. This is very useful as a building block for more complex synchronization primitives. If the index is 0, Consul will only put the key if it does not already exist. If the index is non-zero, the key is only set if the index matches the ModifyIndex of that key."}) 0}
                           {acquire :- (field s/Str {:description "Supply a session ID to use in a lock acquisition operation. This is useful as it allows leader election to be built on top of Consul. If the lock is not held and the session is valid, this increments the LockIndex and sets the Session value of the key in addition to updating the key contents. A key does not need to exist to be acquired. If the lock is already held by the given session, then the LockIndex is not incremented but the key contents are updated. This lets the current lock holder update the key contents without having to give up the lock and reacquire it. Note that an update that does not include the acquire parameter will proceed normally even if another session has locked the key.\n\nFor an example of how to use the lock feature, see the Leader Election Guide."}) ""}
                           {release :- (field s/Str {:description "Supply a session ID to use in a release operation. This is useful when paired with ?acquire= as it allows clients to yield a lock. This will leave the LockIndex unmodified but will clear the associated Session of the key. The key must be held by this session to be unlocked."}) ""}]
-           :body [r s/Any]
+           :consumes ["application/octet-stream"]
+           :body [r (type (byte-array 0))]
            :return s/Bool
            (handler request))
 
